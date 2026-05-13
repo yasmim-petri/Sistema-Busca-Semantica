@@ -3,16 +3,18 @@ import pandas as pd
 import re
 import html
 import os
+import torch
+from sentence_transformers import SentenceTransformer
 
 # Caminhos dos arquivos utilizados
 noticia_json = r"dados\noticias_brutas.json"
 noticia_limpa = "dados/noticias_limpas.csv"
 noticia_organizada = "dados/noticias_formatadas_final.csv"
+model_name = 'ibm-granite/granite-embedding-97m-multilingual-r2'
 
-# Função para limpar o texto das notícias
-
+# Função para limpar o texto das notícia
 def limpar_texto_noticia(texto):
-    """Realiza a limpeza de HTML, entidades e espaços extras."""
+    # Realiza a limpeza de HTML, entidades e espaços extras.
     if not isinstance(texto, str):
         return ""
     
@@ -50,13 +52,13 @@ def processar_dados():
         colunas_disponiveis = [col for col in estrutura_desejada if col in df.columns]
         df_final = df[colunas_disponiveis]
 
-        
         # Exportamos primeiro o arquivo limpo (intermediário)
         df_final.to_csv(noticia_limpa, index=False, encoding='utf-8')
         
         # Exporta o arquivo final formatado
         df_final.to_csv(noticia_organizada, index=False, encoding='utf-8')
-        print(f"Dados processados e limpos com sucesso!")
+        
+        print(f"Dados processados e limpos!")
         print(f"Arquivo final gerado: {noticia_organizada}")
         print(f"Colunas processadas: {list(df_final.columns)}")
         print(df_final.head(3))
@@ -66,6 +68,30 @@ def processar_dados():
     except Exception as e:
         print(f"Ocorreu um erro inesperado: {e}")
 
-# chama a função principal para processar os dados
-if __name__ == "__main__":
-    processar_dados()
+# Processamento e Limpeza
+processar_dados()
+
+# Inicialização do Modelo
+model = SentenceTransformer(model_name) # baixa automaticamente o modelo do Hugging Face
+
+# Carregar dados processados
+df = pd.read_csv(noticia_organizada)
+
+# Preparação de Texto para Embeddings
+textos_para_processar = (df['titulo'] + " " + df['texto']).astype(str).tolist() # Combina título e texto para cada notícia
+
+print(f"Gerando o embeddings para {len(textos_para_processar)} noticias")
+
+# Geração dos Embeddings
+embeddings = model.encode(
+    textos_para_processar, 
+    batch_size=32, 
+    show_progress_bar=True,  # ajuda a acompanhar o processo.
+    convert_to_numpy=True
+)
+
+# Organização Final e Exportação
+df_embeddings = pd.DataFrame({
+    'id': df['id'],
+    'embedding': list(embeddings)
+})
