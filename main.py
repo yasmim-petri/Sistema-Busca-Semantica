@@ -1,97 +1,67 @@
+
 import json
 import pandas as pd
 import re
 import html
 import os
-import torch
+import pickle
+import numpy as np
 from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Caminhos dos arquivos utilizados
-noticia_json = r"dados\noticias_brutas.json"
-noticia_limpa = "dados/noticias_limpas.csv"
+# Caminhos e modelo utilizados
+noticia_json = r"dados/noticias_brutas.json"
 noticia_organizada = "dados/noticias_formatadas_final.csv"
 model_name = 'ibm-granite/granite-embedding-97m-multilingual-r2'
+caminho_embeddings = "dados/embeddings_noticias.pkl"
 
-# Função para limpar o texto das notícia
 def limpar_texto_noticia(texto):
-    # Realiza a limpeza de HTML, entidades e espaços extras.
-    if not isinstance(texto, str):
-        return ""
-    
-    # Decodificar entidades HTML (&aacute;, etc)
+    if not isinstance(texto, str): return ""
     texto = html.unescape(texto)
-    # Remover tags HTML
     texto = re.sub(r'<[^>]+>', ' ', texto)
-    # Normalizar espaços e quebras de linha
     texto = re.sub(r'\s+', ' ', texto)
-    
     return texto.strip()
 
+# Limpeza e processamento dos dados
 def processar_dados():
-    try:
-        # Garantir que a pasta de destino existe
-        os.makedirs("dados", exist_ok=True)
+    if not os.path.exists(noticia_json):
+        print(f"Erro: {noticia_json} não encontrado.")
+        return False
+    
+    os.makedirs("dados", exist_ok=True)
+    with open(noticia_json, 'r', encoding='utf-8') as f:
+        dados = json.load(f)
+    
+    df = pd.DataFrame(dados)
+    df.columns = df.columns.str.strip()
+    
+    if 'texto' in df.columns:
+        df['texto'] = df['texto'].apply(limpar_texto_noticia)
+    
+    estrutura = ["id", "titulo", "texto", "data", "fonte"]
+    colunas_validas = [c for c in estrutura if c in df.columns]
+    df[colunas_validas].to_csv(noticia_organizada, index=False, encoding='utf-8')
+    print("Dados limpos e salvos.")
+    return True
 
-        # Converter JSON para DataFrame
-        print("Lendo arquivo JSON...")
-        with open(noticia_json, 'r', encoding='utf-8') as f:
-            dados = json.load(f)
-        
-        df = pd.DataFrame(dados)
+if processar_dados():
+    # Geração de embeddings
+    model = SentenceTransformer(model_name)
+    df = pd.read_csv(noticia_organizada)
+    
+    # Para uma busca mais rica utilizei título e texto
+    textos_para_processar = (df['titulo'].fillna('') + " " + df['texto'].fillna('')).tolist()
+    
+    print(f"Gerando embeddings para {len(textos_para_processar)} notícias...")
+    embeddings = model.encode(textos_para_processar, batch_size=32, show_progress_bar=True)
 
-        # Limpa espaços nos nomes das colunas
-        df.columns = df.columns.str.strip()
-        
-        # Aplica a limpeza na coluna de texto
-        if 'texto' in df.columns:
-            df['texto'] = df['texto'].apply(limpar_texto_noticia)
-        
-        # Reordenar colunas conforme desejado
-        estrutura_desejada = ["id", "titulo", "texto", "data", "fonte"]
-        # Filtrar apenas as colunas que realmente existem no JSON para evitar erro
-        colunas_disponiveis = [col for col in estrutura_desejada if col in df.columns]
-        df_final = df[colunas_disponiveis]
-
-        # Exportamos primeiro o arquivo limpo (intermediário)
-        df_final.to_csv(noticia_limpa, index=False, encoding='utf-8')
-        
-        # Exporta o arquivo final formatado
-        df_final.to_csv(noticia_organizada, index=False, encoding='utf-8')
-        
-        print(f"Dados processados e limpos!")
-        print(f"Arquivo final gerado: {noticia_organizada}")
-        print(f"Colunas processadas: {list(df_final.columns)}")
-        print(df_final.head(3))
-
-    except FileNotFoundError:
-        print(f"Erro: O arquivo '{noticia_json}' não foi encontrado.")
-    except Exception as e:
-        print(f"Ocorreu um erro inesperado: {e}")
-
-# Processamento e Limpeza
-processar_dados()
-
-# Inicialização do Modelo
-model = SentenceTransformer(model_name) # baixa automaticamente o modelo do Hugging Face
-
-# Carregar dados processados
-df = pd.read_csv(noticia_organizada)
-
-# Preparação de Texto para Embeddings
-textos_para_processar = (df['titulo'] + " " + df['texto']).astype(str).tolist() # Combina título e texto para cada notícia
-
-print(f"Gerando o embeddings para {len(textos_para_processar)} noticias")
-
-# Geração dos Embeddings
-embeddings = model.encode(
-    textos_para_processar, 
-    batch_size=32, 
-    show_progress_bar=True,  # ajuda a acompanhar o processo.
-    convert_to_numpy=True
-)
-
-# Organização Final e Exportação
-df_embeddings = pd.DataFrame({
-    'id': df['id'],
-    'embedding': list(embeddings)
-})
+    # Salva o embedding como um dicionário para facilitar a leitura depois
+    data_to_save = {
+        'embeddings': embeddings,
+        'textos': df['texto'].tolist(),
+        'titulos': df['titulo'].tolist()
+    }
+    
+    with open(caminho_embeddings, 'wb') as f:
+        pickle.dump(data_to_save, f)
+    print(f"Arquivo {caminho_embeddings} salvo com sucesso.")
