@@ -14,7 +14,15 @@ O sistema:
 
 Modelo utilizado:
 
-- `ibm-granite/granite-embedding-97m-multilingual-r2`
+`ibm-granite/granite-embedding-97m-multilingual-r2` foi escolhido por apresentar um bom equilíbrio entre:
+
+- desempenho semântico;
+- velocidade de processamento;
+- baixo consumo de memória;
+- leve exigência de hardware;
+- suporte multilíngue.
+
+Diferente de modelos maiores, que exigem GPUs mais robustas e maior quantidade de memória RAM, este modelo consegue gerar embeddings de forma eficiente até mesmo em máquinas mais simples ou ambientes gratuitos como o Google Colab. Sua arquitetura reduz o tempo de processamento durante a geração dos embeddings, tornando a busca semântica mais rápida e prática para aplicações.
 
 ---
 
