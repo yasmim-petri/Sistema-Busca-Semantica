@@ -89,4 +89,5 @@ if processar_dados():
         print(f" ID: {idx}")
         print(f" Titulo: {titulos[idx]}")
         print(f" Texto: {documentos[idx][:300]}...") # Limitar a exibição do texto para os primeiros 300 caracteres
+        print(f" Fonte: {df['fonte'][idx]}")
         print("-" * 50)
